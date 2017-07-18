@@ -1,0 +1,20 @@
+total 64
+drwxr-xr-x  2 root root 4096 avril 11 17:54 Bureau
+drwxr-xr-x  6 root root 4096 mai   16 10:27 coursESGI
+drwxr-xr-x  2 root root 4096 avril 11 17:54 Documents
+drwxr-xr-x  2 root root 4096 juil. 16 15:48 Images
+-rw-r--r--  1 root root   19 avril 15 17:18 mdp.txt
+drwxr-xr-x  2 root root 4096 avril 11 17:54 Modèles
+drwxr-xr-x  2 root root 4096 avril 11 17:54 Musique
+drwxr-xr-x  3 root root 4096 juin  25 01:06 NDH2k17
+drwxr-xr-x  2 root root 4096 juin   6 16:55 osmosdr
+drwxr-xr-x  4 root root 4096 avril 14 11:10 peda
+drwxr-xr-x  2 root root 4096 avril 11 17:54 Public
+drwxr-xr-x  4 root root 4096 juil. 18 21:53 Téléchargements
+-rw-r--r--  1 root root   15 juin  24 22:49 test.txt
+-rw-r--r--  1 root root    0 juil. 16 15:21 textDecrypted.txt
+-rw-r--r--  1 root root    8 juil. 16 02:06 textEncrypted
+-rw-r--r--  1 root root    0 juil. 16 15:21 textEncrypted.txt
+-rw-r--r--  1 root root    0 juil. 16 02:06 text.txt
+drwxr-xr-x  2 root root 4096 avril 11 17:54 Vidéos
+drwxr-xr-x 10 root root 4096 juil. 18 21:54 workspace

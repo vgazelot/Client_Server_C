@@ -1,0 +1,218 @@
+#include <stdio.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <assert.h>
+#include <pthread.h>
+#include <sys/mman.h>
+static int *globcd;
+void connected(int sock);
+
+void die(char * mess) {
+	perror(mess);
+	exit(1);
+}
+void clearCharTab(char buffer[],int size) {
+	int i;
+	for(i=0;i<size;i++) {
+		buffer[i] = '\0';
+	}
+}
+int whois(int sock) {
+	char login[40];
+	char mdp[40];
+	int nb = 0;
+	while(nb < 3) {
+		send(sock,"Login :",7,0);
+		recv(sock,login,sizeof(login),0);
+		send(sock,"Mdp :",5,0);
+		recv(sock,mdp,sizeof(mdp),0);
+		if (strcmp(login,"admin") == 0 && strcmp(mdp,"1234") == 0) {
+			return 1;
+		}
+		nb++;
+	}
+	return 0;
+	
+}
+void *process(void *socket) {
+	int sock = *(int*) socket;
+	if(whois(sock)) {
+		connected(sock);
+	}
+	else {
+		send(sock,"3 fails : you have been kicked BYE",31,0);
+	}
+	return 0;
+}
+char * aes_encrypt(char *text) {
+	FILE *f = fopen("text.txt","w");
+	if (f== NULL) {
+		printf("Error opening text.txt\n");
+		exit(1);
+	}
+	fprintf(f,"%s",text);
+	fclose(f);
+	system("python aes.py -e");
+	char * buffer = NULL;
+	int string_size,read_size;
+	FILE *fr = fopen("textEncrypted.txt","r");
+	if (fr) {
+		fseek(fr,0,SEEK_END);
+		string_size = ftell(fr);
+		rewind(fr);
+		buffer = (char *) malloc(sizeof(char) * (string_size +1));
+		read_size = fread(buffer,sizeof(char),string_size,fr);
+		buffer[string_size] = '\0';
+		if(string_size != read_size) {
+			//ERROR
+			printf("Error when reading textEncrypted\n");
+			free(buffer);
+			buffer = NULL;
+		}
+	}
+	else {
+		printf("error when opening textEncrypted.txt\n");
+	}
+	return buffer;
+}
+void connected(int sock) {
+	globcd = mmap(NULL,sizeof *globcd, PROT_READ | PROT_WRITE,MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+ 	char client_message[2000], serv_message[4096];
+	int read_size;
+	clearCharTab(client_message,1024);	
+	char welcome[] = "!********************\\ Welcome ! /********************!";
+	//char *textEncrypted = aes_encrypt(welcome);
+	//printf("textencrypted : %s \n",textEncrypted);
+	//send(sock,textEncrypted,sizeof(textEncrypted),0);
+	send(sock,welcome,sizeof(welcome),0);
+	while((read_size = recv(sock, client_message , 2000 , 0)) > 0 ) {
+		*globcd = 0;
+		int link[2];
+	 	pid_t pid;
+	  	char foo[4096];
+	
+		if(pipe(link)==-1) {
+	   		die("pipe");
+		}	
+		if ((pid = fork()) == -1){
+		   	die("fork");
+		}
+		
+		if(pid == 0) {
+			dup2 (link[1], STDOUT_FILENO);
+			close(link[0]);
+			close(link[1]);
+			if(strcmp(client_message,"rls") == 0) {
+                                pid_t pidexec = fork();
+                                if(pidexec == 0) {
+					execl("/bin/ls","ls","-l",NULL);
+                                }
+                        }
+                        else if(strcmp(client_message,"rpwd") == 0) {
+                                pid_t pidexec = fork();
+                                if(pidexec == 0) {
+					execl("/bin/pwd","pwd",NULL);
+                                }
+                        }
+                        else if(strcmp(client_message,"rcd") == 0) {
+				*globcd = 1;
+				send(sock,"Où voulez vous vous déplacer ?",sizeof(serv_message),0);
+				clearCharTab(client_message,sizeof(client_message));
+				recv(sock,client_message,2000,0);
+                                pid_t pidexec = fork();
+                                if(pidexec == 0) {
+					execl("/bin/echo","echo",client_message,NULL);
+                                }
+				clearCharTab(client_message,sizeof(client_message));
+
+                        }
+			exit(0);
+				
+		}else {
+				
+			close(link[1]);
+			int n;
+			memset(foo,0,sizeof(foo));
+			clearCharTab(foo,sizeof(foo));
+			n=read(link[0], foo, sizeof(foo));
+			foo[n-1] = '\0';
+			memset(serv_message,0,sizeof(serv_message));
+			clearCharTab(serv_message,sizeof(serv_message));
+			strcpy(serv_message,foo);
+			if(*globcd == 1){
+				if(chdir(serv_message) == 0 ) {
+					send(sock,"CDOK\n",5,0);
+				}
+				else {
+					perror("chdir");
+					send(sock,"CDKO\n",5,0);
+				}
+			}else {
+				send(sock,serv_message,sizeof(serv_message),0);
+			}
+			memset(serv_message,0,sizeof(serv_message));
+			memset(client_message,0,sizeof(client_message));
+			memset(foo,0,sizeof(foo));
+			clearCharTab(foo,sizeof(foo));
+			clearCharTab(client_message,sizeof(client_message));	
+			clearCharTab(serv_message,sizeof(serv_message));
+			wait(NULL);	
+		}
+		if(read_size == 0) {
+			puts("Client disconnected");
+			fflush(stdout);
+		}
+		else if(read_size == -1) {
+			perror("recv failed");
+		}
+	}
+	munmap(globcd,sizeof *globcd);
+}
+int main(){
+ 	int serv_sock, client_sock;
+ 	struct sockaddr_in serverAddr;
+ 	struct sockaddr_storage serverStorage;
+ 	socklen_t addr_size;
+
+
+ 	serv_sock = socket(PF_INET, SOCK_STREAM, 0);
+ 	 
+ 	serverAddr.sin_family = AF_INET;
+  	serverAddr.sin_port = htons(7891);
+  	serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+  	memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);  
+
+  	bind(serv_sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
+
+  	if(listen(serv_sock,5)==0)
+   		printf("Listening\n");
+	else
+		printf("Error\n");
+
+	addr_size = sizeof serverStorage;
+	while(1) {
+	
+	  	client_sock = accept(serv_sock, (struct sockaddr *) &serverStorage, &addr_size);
+		if (client_sock < 0) {
+         		perror("ERROR on accept");
+         		exit(1);
+      		}
+		
+		pthread_t  thread;
+		int *new_sock = malloc(1);
+		*new_sock = client_sock;
+     		if(pthread_create(&thread, NULL, process, (void*)new_sock) < 0) {
+			perror("could not creat thread");
+			return 1;
+		}
+	
+	}
+	return 0;
+}
